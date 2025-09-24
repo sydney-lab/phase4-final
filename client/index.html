@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Management System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        nav { background: #333; padding: 1rem; margin-bottom: 2rem; }
+        nav a { color: white; text-decoration: none; margin-right: 1rem; padding: 0.5rem 1rem; }
+        nav a:hover { background: #555; }
+        .form-container { max-width: 500px; margin: 2rem 0; padding: 2rem; border: 1px solid #ddd; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #ddd; }
+        .error { color: red; font-size: 0.875rem; }
+        .btn { background: #007bff; color: white; padding: 0.5rem 1rem; border: none; cursor: pointer; margin-right: 0.5rem; }
+        .btn:hover { background: #0056b3; }
+        .btn-danger { background: #dc3545; }
+        .recipe-card { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function NavBar({ currentPage, setCurrentPage }) {
+            return (
+                <nav>
+                    <a href="#" onClick={() => setCurrentPage('home')} style={{background: currentPage === 'home' ? '#555' : ''}}>Home</a>
+                    <a href="#" onClick={() => setCurrentPage('recipes')} style={{background: currentPage === 'recipes' ? '#555' : ''}}>Recipes</a>
+                    <a href="#" onClick={() => setCurrentPage('users')} style={{background: currentPage === 'users' ? '#555' : ''}}>Users</a>
+                </nav>
+            );
+        }
+
+        function Home() {
+            return (
+                <div>
+                    <h1>Recipe Management System</h1>
+                    <p>Welcome to the Recipe Management System! Use the navigation above to:</p>
+                    <ul>
+                        <li>View and manage recipes</li>
+                        <li>View and create users</li>
+                        <li>Add ingredients to recipes</li>
+                    </ul>
+                </div>
+            );
+        }
+
+        function Users() {
+            const [users, setUsers] = useState([]);
+            const [formData, setFormData] = useState({ name: '', email: '' });
+            const [errors, setErrors] = useState({});
+
+            useEffect(() => {
+                fetchUsers();
+            }, []);
+
+            const fetchUsers = async () => {
+                try {
+                    const response = await fetch('http://localhost:5556/users');
+                    const data = await response.json();
+                    setUsers(data);
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                }
+            };
+
+            const validateForm = () => {
+                const newErrors = {};
+                if (!formData.name || formData.name.length < 2) {
+                    newErrors.name = 'Name must be at least 2 characters';
+                }
+                if (!/^[A-Za-z\s]+$/.test(formData.name)) {
+                    newErrors.name = 'Name can only contain letters and spaces';
+                }
+                if (!formData.email || !/\S+@\S+\.\S+/.test(formData.email)) {
+                    newErrors.email = 'Invalid email format';
+                }
+                setErrors(newErrors);
+                return Object.keys(newErrors).length === 0;
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!validateForm()) return;
+
+                try {
+                    const response = await fetch('http://localhost:5556/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (response.ok) {
+                        fetchUsers();
+                        setFormData({ name: '', email: '' });
+                        setErrors({});
+                    }
+                } catch (error) {
+                    console.error('Error creating user:', error);
+                }
+            };
+
+            return (
+                <div>
+                    <h1>Users</h1>
+                    
+                    <div className="form-container">
+                        <h2>Add New User</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>Name:</label>
+                                <input 
+                                    type="text" 
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                />
+                                {errors.name && <div className="error">{errors.name}</div>}
+                            </div>
+
+                            <div className="form-group">
+                                <label>Email:</label>
+                                <input 
+                                    type="email" 
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                />
+                                {errors.email && <div className="error">{errors.email}</div>}
+                            </div>
+
+                            <button type="submit" className="btn">Add User</button>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h2>All Users</h2>
+                        {users.map(user => (
+                            <div key={user.id} className="recipe-card">
+                                <h3>{user.name}</h3>
+                                <p><strong>Email:</strong> {user.email}</p>
+                                <p><strong>Recipes:</strong> {user.recipes?.length || 0}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function Recipes() {
+            const [recipes, setRecipes] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [editingRecipe, setEditingRecipe] = useState(null);
+            const [formData, setFormData] = useState({ title: '', instructions: '', cook_time: '', user_id: '' });
+            const [errors, setErrors] = useState({});
+
+            useEffect(() => {
+                fetchRecipes();
+                fetchUsers();
+            }, []);
+
+            const fetchRecipes = async () => {
+                try {
+                    const response = await fetch('http://localhost:5556/recipes');
+                    const data = await response.json();
+                    setRecipes(data);
+                } catch (error) {
+                    console.error('Error fetching recipes:', error);
+                }
+            };
+
+            const fetchUsers = async () => {
+                try {
+                    const response = await fetch('http://localhost:5556/users');
+                    const data = await response.json();
+                    setUsers(data);
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                }
+            };
+
+            const validateForm = () => {
+                const newErrors = {};
+                if (!formData.title || formData.title.length < 2) {
+                    newErrors.title = 'Title must be at least 2 characters';
+                }
+                if (!formData.instructions || formData.instructions.length < 10) {
+                    newErrors.instructions = 'Instructions must be at least 10 characters';
+                }
+                if (!formData.cook_time || formData.cook_time <= 0) {
+                    newErrors.cook_time = 'Cook time must be positive';
+                }
+                if (!formData.user_id) {
+                    newErrors.user_id = 'Please select a user';
+                }
+                setErrors(newErrors);
+                return Object.keys(newErrors).length === 0;
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!validateForm()) return;
+
+                try {
+                    const url = editingRecipe ? `http://localhost:5556/recipes/${editingRecipe.id}` : 'http://localhost:5556/recipes';
+                    const method = editingRecipe ? 'PATCH' : 'POST';
+                    
+                    const response = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({...formData, cook_time: parseInt(formData.cook_time), user_id: parseInt(formData.user_id)})
+                    });
+
+                    if (response.ok) {
+                        fetchRecipes();
+                        setFormData({ title: '', instructions: '', cook_time: '', user_id: '' });
+                        setEditingRecipe(null);
+                        setErrors({});
+                    }
+                } catch (error) {
+                    console.error('Error saving recipe:', error);
+                }
+            };
+
+            const handleDelete = async (id) => {
+                try {
+                    const response = await fetch(`http://localhost:5556/recipes/${id}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        fetchRecipes();
+                    }
+                } catch (error) {
+                    console.error('Error deleting recipe:', error);
+                }
+            };
+
+            const handleEdit = (recipe) => {
+                setEditingRecipe(recipe);
+                setFormData({
+                    title: recipe.title,
+                    instructions: recipe.instructions,
+                    cook_time: recipe.cook_time,
+                    user_id: recipe.user_id
+                });
+            };
+
+            return (
+                <div>
+                    <h1>Recipes</h1>
+                    
+                    <div className="form-container">
+                        <h2>{editingRecipe ? 'Edit Recipe' : 'Add New Recipe'}</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label>Title:</label>
+                                <input 
+                                    type="text" 
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                />
+                                {errors.title && <div className="error">{errors.title}</div>}
+                            </div>
+
+                            <div className="form-group">
+                                <label>Instructions:</label>
+                                <textarea 
+                                    rows="4"
+                                    value={formData.instructions}
+                                    onChange={(e) => setFormData({...formData, instructions: e.target.value})}
+                                />
+                                {errors.instructions && <div className="error">{errors.instructions}</div>}
+                            </div>
+
+                            <div className="form-group">
+                                <label>Cook Time (minutes):</label>
+                                <input 
+                                    type="number" 
+                                    value={formData.cook_time}
+                                    onChange={(e) => setFormData({...formData, cook_time: e.target.value})}
+                                />
+                                {errors.cook_time && <div className="error">{errors.cook_time}</div>}
+                            </div>
+
+                            <div className="form-group">
+                                <label>User:</label>
+                                <select 
+                                    value={formData.user_id}
+                                    onChange={(e) => setFormData({...formData, user_id: e.target.value})}
+                                >
+                                    <option value="">Select a user</option>
+                                    {users.map(user => (
+                                        <option key={user.id} value={user.id}>{user.name}</option>
+                                    ))}
+                                </select>
+                                {errors.user_id && <div className="error">{errors.user_id}</div>}
+                            </div>
+
+                            <button type="submit" className="btn">
+                                {editingRecipe ? 'Update Recipe' : 'Add Recipe'}
+                            </button>
+                            {editingRecipe && (
+                                <button type="button" className="btn" onClick={() => {
+                                    setEditingRecipe(null);
+                                    setFormData({ title: '', instructions: '', cook_time: '', user_id: '' });
+                                }}>
+                                    Cancel
+                                </button>
+                            )}
+                        </form>
+                    </div>
+
+                    <div>
+                        <h2>All Recipes</h2>
+                        {recipes.map(recipe => (
+                            <div key={recipe.id} className="recipe-card">
+                                <h3>{recipe.title}</h3>
+                                <p><strong>Cook Time:</strong> {recipe.cook_time} minutes</p>
+                                <p><strong>Instructions:</strong> {recipe.instructions}</p>
+                                <p><strong>Created by:</strong> {recipe.user?.name}</p>
+                                <button className="btn" onClick={() => handleEdit(recipe)}>Edit</button>
+                                <button className="btn btn-danger" onClick={() => handleDelete(recipe.id)}>Delete</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [currentPage, setCurrentPage] = useState('home');
+
+            const renderPage = () => {
+                switch(currentPage) {
+                    case 'recipes': return <Recipes />;
+                    case 'users': return <Users />;
+                    default: return <Home />;
+                }
+            };
+
+            return (
+                <div>
+                    <NavBar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+                    {renderPage()}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
